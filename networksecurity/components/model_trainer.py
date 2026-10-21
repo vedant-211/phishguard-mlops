@@ -1,7 +1,6 @@
 import os
 import sys
 import joblib
-import mlflow
 import numpy as np
 from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier, AdaBoostClassifier
 from sklearn.tree import DecisionTreeClassifier
@@ -85,6 +84,8 @@ class ModelTrainer:
             )
 
             # MLflow logging
+            import mlflow
+
             tracking_uri = os.getenv("MLFLOW_TRACKING_URI", "./mlruns")
             mlflow.set_tracking_uri(tracking_uri)
             with mlflow.start_run():

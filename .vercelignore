@@ -1,0 +1,6 @@
+Artifacts/
+mlruns/
+data/
+.github/
+Dockerfile
+push_data.py

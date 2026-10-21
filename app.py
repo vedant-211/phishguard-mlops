@@ -6,9 +6,6 @@ from datetime import datetime
 from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.responses import JSONResponse, HTMLResponse
 from fastapi.middleware.cors import CORSMiddleware
-import uvicorn
-
-from networksecurity.pipeline.training_pipeline import TrainingPipeline
 
 app = FastAPI(
     title="Network Security – Phishing Website Detection MLOps API",
@@ -36,27 +33,22 @@ pipeline_state = {
 
 @app.on_event("startup")
 def startup_event():
-    # Verify or trigger training if model doesn't exist
+    # Load the trained model if the artifacts exist; do not train during startup.
     if os.path.exists("final_model/model.pkl") and os.path.exists("final_model/preprocessor.pkl"):
         pipeline_state["is_trained"] = True
-        pipeline_state["best_model"] = "Random Forest"
-        pipeline_state["f1_score"] = 0.982
-        pipeline_state["precision"] = 0.978
-        pipeline_state["recall"] = 0.985
+        metrics_path = "final_model/metrics.json"
+        if os.path.exists(metrics_path):
+            import json
+            with open(metrics_path, "r") as metrics_file:
+                metrics = json.load(metrics_file)
+            pipeline_state["best_model"] = metrics.get("best_model")
+            pipeline_state["f1_score"] = metrics.get("f1_score")
+            pipeline_state["precision"] = metrics.get("precision")
+            pipeline_state["recall"] = metrics.get("recall")
+            pipeline_state["models_report"] = metrics.get("models_report", {})
         pipeline_state["last_run"] = datetime.now().isoformat()
     else:
-        try:
-            pipeline = TrainingPipeline()
-            artifact = pipeline.run_pipeline()
-            pipeline_state["is_trained"] = True
-            pipeline_state["best_model"] = artifact.best_model_name
-            pipeline_state["f1_score"] = artifact.test_metric_artifact.f1_score
-            pipeline_state["precision"] = artifact.test_metric_artifact.precision_score
-            pipeline_state["recall"] = artifact.test_metric_artifact.recall_score
-            pipeline_state["models_report"] = artifact.models_report
-            pipeline_state["last_run"] = datetime.now().isoformat()
-        except Exception as e:
-            print("Auto-training skipped/deferred:", e)
+        print("Model artifacts not found; skipping startup training.")
 
 @app.get("/", response_class=HTMLResponse)
 def root():
@@ -97,6 +89,8 @@ def get_status():
 @app.get("/train")
 def train_pipeline():
     try:
+        from networksecurity.pipeline.training_pipeline import TrainingPipeline
+
         pipeline = TrainingPipeline()
         artifact = pipeline.run_pipeline()
         pipeline_state["is_trained"] = True
@@ -152,4 +146,6 @@ async def predict(file: UploadFile = File(...)):
         raise HTTPException(status_code=500, detail=str(e))
 
 if __name__ == "__main__":
-    uvicorn.run("app.py:app", host="0.0.0.0", port=8000, reload=True)
+    import uvicorn
+
+    uvicorn.run("app:app", host="0.0.0.0", port=8000, reload=True)
